@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Blocchi">
+<meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Blocchi</title>
+<style>
+  :root {
+    --h: 48px;
+    --label: 56px;
+    --bg: #f2f2f7;
+    --surface: #ffffff;
+    --text: #1c1c1e;
+    --muted: #8e8e93;
+    --line: #e5e5ea;
+    --line-soft: #f0f0f4;
+    --accent: #0a84ff;
+    --now: #ff3b30;
+    --bar: rgba(249,249,251,.88);
+    --c0-bg:#ffe8c7; --c0-fg:#8a4b00; --c0-bd:#ff9f0a;
+    --c1-bg:#d3f5dc; --c1-fg:#13622b; --c1-bd:#30c159;
+    --c2-bg:#d6e9ff; --c2-fg:#0a4a99; --c2-bd:#0a84ff;
+    --c3-bg:#efdcfb; --c3-fg:#5f2390; --c3-bd:#bf5af2;
+    --c4-bg:#ffdcdc; --c4-fg:#9a1c1c; --c4-bd:#ff453a;
+    --c5-bg:#d4f3f5; --c5-fg:#0d5c63; --c5-bd:#2ac3cf;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #000000; --surface: #1c1c1e; --text: #f2f2f7; --muted: #8e8e93;
+      --line: #2c2c2e; --line-soft: #1a1a1c; --bar: rgba(22,22,24,.88);
+      --c0-bg:#4a2f0a; --c0-fg:#ffd699; --c0-bd:#ff9f0a;
+      --c1-bg:#123d20; --c1-fg:#a6f0bb; --c1-bd:#30d158;
+      --c2-bg:#0e2f55; --c2-fg:#a9d1ff; --c2-bd:#0a84ff;
+      --c3-bg:#3a1b52; --c3-fg:#e3c2fa; --c3-bd:#bf5af2;
+      --c4-bg:#4d1414; --c4-fg:#ffb3ae; --c4-bd:#ff453a;
+      --c5-bg:#0d3b3f; --c5-fg:#a3eef3; --c5-bd:#40c8e0;
+    }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 16px/1.25 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    overscroll-behavior: none; }
+  body { display: flex; flex-direction: column; -webkit-user-select: none; user-select: none;
+    -webkit-touch-callout: none; }
+
+  header { padding: calc(env(safe-area-inset-top) + 8px) 12px 10px; background: var(--bg);
+    display: flex; align-items: center; gap: 8px; border-bottom: 0.5px solid var(--line); }
+  header .nav { flex: 0 0 40px; width: 40px; height: 40px; border: 0; background: none; color: var(--accent);
+    font-size: 26px; border-radius: 20px; }
+  header .nav:active { background: var(--line); }
+  #title { flex: 1; min-width: 0; text-align: center; border: 0; background: none; color: var(--text); padding: 0; }
+  #title b { display: block; font-size: 19px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #title small { display: block; font-size: 13px; color: var(--muted); margin-top: 2px; }
+
+  #scroller { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; position: relative; }
+  #grid { position: relative; height: calc(var(--h) * 34 + 32px); margin: 0 12px 0 0;
+    padding-top: 16px; touch-action: pan-y; }
+  body.planning #grid { touch-action: none; }
+  #grid-inner { position: relative; height: calc(var(--h) * 34); }
+  .row { position: absolute; left: var(--label); right: 0; height: var(--h);
+    border-top: 1px solid var(--line); }
+  .row.half { border-top: 1px dashed var(--line); }
+  body.planning .row:not(.taken):nth-child(odd) { background: transparent; }
+  .row.end { height: 0; }
+  .lbl { position: absolute; left: 0; width: calc(var(--label) - 8px); text-align: right;
+    font-size: 12px; color: var(--muted); transform: translateY(-50%); font-variant-numeric: tabular-nums; }
+  .lbl.half { font-size: 10px; opacity: .6; }
+
+  .block, .ghost { position: absolute; left: calc(var(--label) + 4px); right: 0;
+    border-radius: 9px; padding: 5px 9px; overflow: hidden;
+    background: var(--bg-c); color: var(--fg-c); border-left: 4px solid var(--bd-c); }
+  .block { transition: box-shadow .15s, transform .15s; }
+  .block.active { box-shadow: 0 6px 18px rgba(0,0,0,.18); transform: scale(1.01); z-index: 5; }
+  .ghost { --bg-c: transparent; border: 2px dashed var(--accent); border-left-width: 2px;
+    background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); z-index: 4; }
+  .block .t { font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .block .tm, .ghost .tm { font-size: 12px; opacity: .75; font-variant-numeric: tabular-nums; }
+  .block.short { display: flex; align-items: center; gap: 8px; padding-top: 0; padding-bottom: 0; }
+  .block.short .t { flex: 0 1 auto; }
+  .block input { width: 100%; font: inherit; font-size: 16px; font-weight: 600; color: inherit;
+    background: transparent; border: 0; outline: none; padding: 0; -webkit-user-select: text; user-select: text; }
+  .block input::placeholder { color: inherit; opacity: .5; }
+  .block.short input { flex: 1; }
+  .handle { display: none; position: absolute; left: 0; right: 0; height: 18px; }
+  .handle.top { top: -4px; } .handle.bot { bottom: -4px; }
+  .handle::after { content: ""; position: absolute; left: 50%; width: 32px; height: 4px; margin-left: -16px;
+    border-radius: 2px; background: var(--bd-c); opacity: .7; }
+  .handle.top::after { top: 6px; } .handle.bot::after { bottom: 6px; }
+  body.planning .handle { display: block; }
+  body.planning .block.short .handle.top { display: none; }
+  .c0{--bg-c:var(--c0-bg);--fg-c:var(--c0-fg);--bd-c:var(--c0-bd)}
+  .c1{--bg-c:var(--c1-bg);--fg-c:var(--c1-fg);--bd-c:var(--c1-bd)}
+  .c2{--bg-c:var(--c2-bg);--fg-c:var(--c2-fg);--bd-c:var(--c2-bd)}
+  .c3{--bg-c:var(--c3-bg);--fg-c:var(--c3-fg);--bd-c:var(--c3-bd)}
+  .c4{--bg-c:var(--c4-bg);--fg-c:var(--c4-fg);--bd-c:var(--c4-bd)}
+  .c5{--bg-c:var(--c5-bg);--fg-c:var(--c5-fg);--bd-c:var(--c5-bd)}
+
+  #now { position: absolute; left: calc(var(--label) - 4px); right: 0; height: 2px; background: var(--now);
+    z-index: 6; pointer-events: none; display: none; }
+  #now::before { content: ""; position: absolute; left: -4px; top: -4px; width: 10px; height: 10px;
+    border-radius: 5px; background: var(--now); }
+
+  footer { position: relative; padding: 10px 16px calc(env(safe-area-inset-bottom) + 10px);
+    background: var(--bar); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+    border-top: 0.5px solid var(--line); display: flex; align-items: center; justify-content: center; }
+  #hint { position: absolute; bottom: calc(100% + 10px); left: 50%; transform: translateX(-50%);
+    background: var(--text); color: var(--bg); font-size: 13px; padding: 7px 12px; border-radius: 16px;
+    white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .2s; }
+  body.planning #hint.show { opacity: .9; }
+  #plan { min-width: 180px; height: 50px; border-radius: 25px; border: 0; font: inherit; font-size: 17px;
+    font-weight: 600; background: var(--accent); color: #fff; display: flex; align-items: center;
+    justify-content: center; gap: 8px; transition: background .2s, transform .1s; }
+  #plan:active { transform: scale(.97); }
+  body.planning #plan { background: var(--text); color: var(--bg); }
+
+  #sheet-bg { position: fixed; inset: 0; background: rgba(0,0,0,.35); opacity: 0; pointer-events: none;
+    transition: opacity .2s; z-index: 20; }
+  #sheet { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surface); z-index: 21;
+    border-radius: 16px 16px 0 0; padding: 10px 16px calc(env(safe-area-inset-bottom) + 16px);
+    transform: translateY(105%); transition: transform .25s cubic-bezier(.2,.8,.2,1); }
+  body.sheet #sheet { transform: none; }
+  body.sheet #sheet-bg { opacity: 1; pointer-events: auto; }
+  #sheet .grab { width: 36px; height: 5px; border-radius: 3px; background: var(--line); margin: 0 auto 14px; }
+  #sheet .when { color: var(--muted); font-size: 14px; margin-bottom: 8px; font-variant-numeric: tabular-nums; }
+  #sheet input { width: 100%; font: inherit; font-size: 20px; font-weight: 600; padding: 12px 14px;
+    border-radius: 12px; border: 0; background: var(--bg); color: var(--text); outline: none;
+    -webkit-user-select: text; user-select: text; }
+  #swatches { display: flex; gap: 12px; margin: 16px 0 18px; }
+  #swatches button { width: 36px; height: 36px; border-radius: 18px; border: 3px solid transparent;
+    background: var(--bd-c); padding: 0; }
+  #swatches button.sel { border-color: var(--text); }
+  .actions { display: flex; gap: 10px; }
+  .actions button { flex: 1; height: 48px; border-radius: 12px; border: 0; font: inherit; font-size: 17px; font-weight: 600; }
+  #del { background: var(--bg); color: var(--now); }
+  #done { background: var(--accent); color: #fff; }
+</style>
+</head>
+<body>
+<header>
+  <button class="nav" id="prev" aria-label="Giorno precedente">‹</button>
+  <button id="title"><b id="dname"></b><small id="dsub"></small></button>
+  <button class="nav" id="next" aria-label="Giorno successivo">›</button>
+</header>
+
+<div id="scroller">
+  <div id="grid"><div id="grid-inner"><div id="now"></div></div></div>
+</div>
+
+<footer>
+  <div id="hint">Trascina sulla colonna per creare un blocco</div>
+  <button id="plan"><span id="plan-ico">＋</span><span id="plan-txt">Pianifica</span></button>
+</footer>
+
+<div id="sheet-bg"></div>
+<div id="sheet" role="dialog" aria-label="Modifica blocco">
+  <div class="grab"></div>
+  <div class="when" id="s-when"></div>
+  <input id="s-title" placeholder="Nome attività" enterkeyhint="done" autocomplete="off">
+  <div id="swatches"></div>
+  <div class="actions"><button id="del">Elimina</button><button id="done">Fatto</button></div>
+</div>
+
+<script>
+const START = 6, SLOTS = 34, COLORS = 6;
+const H = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--h'));
+const $ = s => document.querySelector(s);
+const inner = $('#grid-inner'), scroller = $('#scroller'), grid = $('#grid');
+
+let day = isoDate(new Date());
+let blocks = [];
+let planning = false;
+let drag = null;
+let editingId = null;
+let sheetId = null;
+
+function isoDate(d) { return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+function parseDate(s) { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); }
+function fmt(slot) { const m = START*60 + slot*30; return Math.floor(m/60) + ':' + String(m%60).padStart(2,'0'); }
+function dur(n) { const h = Math.floor(n/2), m = n%2 ? 30 : 0; return h ? (m ? `${h} h ${m}` : `${h} h`) : `${m} min`; }
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+function load() {
+  try { blocks = JSON.parse(localStorage.getItem('tb:' + day)) || []; } catch { blocks = []; }
+}
+function save() {
+  try {
+    if (blocks.length) localStorage.setItem('tb:' + day, JSON.stringify(blocks));
+    else localStorage.removeItem('tb:' + day);
+  } catch {}
+}
+
+// ---------- griglia ----------
+function buildGrid() {
+  for (let i = 0; i <= SLOTS; i++) {
+    const r = document.createElement('div');
+    r.className = 'row' + (i % 2 ? ' half' : '') + (i === SLOTS ? ' end' : '');
+    r.style.top = `calc(var(--h) * ${i})`;
+    inner.appendChild(r);
+    const l = document.createElement('div');
+    l.className = 'lbl' + (i % 2 ? ' half' : '');
+    l.textContent = i % 2 ? ':30' : fmt(i);
+    l.style.top = `calc(var(--h) * ${i})`;
+    inner.appendChild(l);
+  }
+}
+
+// ---------- rendering ----------
+function render() {
+  inner.querySelectorAll('.block').forEach(e => e.remove());
+  for (const b of blocks) {
+    const el = document.createElement('div');
+    const short = b.e - b.s === 1;
+    el.className = `block c${b.c}` + (short ? ' short' : '');
+    el.dataset.id = b.id;
+    place(el, b.s, b.e);
+    if (b.id === editingId) {
+      const inp = document.createElement('input');
+      inp.value = b.t || ''; inp.placeholder = 'Nome attività…';
+      inp.enterKeyHint = 'done'; inp.autocomplete = 'off';
+      inp.addEventListener('keydown', e => { if (e.key === 'Enter') inp.blur(); });
+      inp.addEventListener('blur', () => finishEdit(inp.value));
+      el.appendChild(inp);
+    } else {
+      const t = document.createElement('div'); t.className = 't'; t.textContent = b.t || 'Attività';
+      el.appendChild(t);
+    }
+    const tm = document.createElement('div'); tm.className = 'tm';
+    tm.textContent = `${fmt(b.s)}–${fmt(b.e)}`;
+    el.appendChild(tm);
+    el.insertAdjacentHTML('beforeend', '<div class="handle top"></div><div class="handle bot"></div>');
+    inner.appendChild(el);
+  }
+  const total = blocks.reduce((a, b) => a + b.e - b.s, 0);
+  $('#dsub').textContent = (day === isoDate(new Date()) ? 'Oggi · ' : '') +
+    (total ? `${dur(total)} pianificate` : 'Niente in programma');
+}
+function place(el, s, e) {
+  el.style.top = `calc(var(--h) * ${s} + 1px)`;
+  el.style.height = `calc(var(--h) * ${e - s} - 2px)`;
+}
+function renderHeader() {
+  const d = parseDate(day);
+  const s = d.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
+  $('#dname').textContent = s[0].toUpperCase() + s.slice(1);
+}
+function renderNow() {
+  const now = new Date(), el = $('#now');
+  const mins = now.getHours()*60 + now.getMinutes() - START*60;
+  if (day !== isoDate(now) || mins < 0 || mins > SLOTS*30) { el.style.display = 'none'; return; }
+  el.style.display = 'block';
+  el.style.top = `calc(var(--h) * ${mins / 30} - 1px)`;
+}
+function showDay(d) {
+  if (editingId) document.activeElement.blur();
+  day = d; load(); renderHeader(); render(); renderNow();
+}
+
+// ---------- vincoli (niente sovrapposizioni) ----------
+const others = id => blocks.filter(b => b.id !== id);
+function occupied(slot, id) { return others(id).some(b => b.s <= slot && slot < b.e); }
+function gap(s, e, id) { // spazio libero attorno a [s, e)
+  let lo = 0, hi = SLOTS;
+  for (const b of others(id)) { if (b.e <= s) lo = Math.max(lo, b.e); if (b.s >= e) hi = Math.min(hi, b.s); }
+  return { lo, hi };
+}
+
+// ---------- trascinamento ----------
+function slotAt(clientY) {
+  const y = clientY - inner.getBoundingClientRect().top;
+  return clamp(Math.floor(y / H()), 0, SLOTS - 1);
+}
+
+grid.addEventListener('pointerdown', e => {
+  if (!planning || drag || e.target.closest('input')) return;
+  const hitId = e.target.closest('.block')?.dataset.id;
+  const handle = e.target.classList.contains('top') ? 'top' : e.target.classList.contains('bot') ? 'bot' : null;
+  if (editingId) document.activeElement.blur(); // salva e ridisegna
+  const slot = slotAt(e.clientY);
+  const bEl = hitId && inner.querySelector(`.block[data-id="${hitId}"]`);
+  if (bEl) {
+    const b = blocks.find(x => x.id === bEl.dataset.id);
+    const g = gap(b.s, b.e, b.id);
+    const mode = handle || 'press';
+    drag = { mode, b, g, offset: slot - b.s, el: bEl, startY: e.clientY };
+    bEl.classList.add('active');
+  } else {
+    if (occupied(slot)) return;
+    const g = gap(slot, slot + 1);
+    const el = document.createElement('div');
+    el.className = 'ghost';
+    el.innerHTML = '<div class="tm"></div>';
+    inner.appendChild(el);
+    drag = { mode: 'create', anchor: slot, g, s: slot, e: slot + 1, el, startY: e.clientY };
+    updateGhost();
+  }
+  drag.y = e.clientY;
+  grid.setPointerCapture(e.pointerId);
+  if (navigator.vibrate) navigator.vibrate(8);
+  autoScroll();
+});
+
+grid.addEventListener('pointermove', e => { if (drag) { drag.y = e.clientY; step(); } });
+grid.addEventListener('pointerup', endDrag);
+grid.addEventListener('pointercancel', () => { if (!drag) return; drag.el.classList.remove('active');
+  if (drag.mode === 'create') drag.el.remove(); drag = null; render(); });
+// su iOS il blocco dello scroll è garantito anche da touchmove non passivo
+grid.addEventListener('touchmove', e => { if (planning) e.preventDefault(); }, { passive: false });
+
+function step() {
+  const d = drag, slot = slotAt(d.y);
+  if (d.mode === 'create') {
+    d.s = clamp(Math.min(d.anchor, slot), d.g.lo, d.anchor);
+    d.e = clamp(Math.max(d.anchor, slot) + 1, d.anchor + 1, d.g.hi);
+    updateGhost();
+  } else {
+    const b = d.b, len = b.e - b.s;
+    if (d.mode === 'press' && Math.abs(d.y - d.startY) > 8) d.mode = 'move';
+    if (d.mode === 'move') { b.s = clamp(slot - d.offset, d.g.lo, d.g.hi - len); b.e = b.s + len; }
+    if (d.mode === 'top') b.s = clamp(slot, d.g.lo, b.e - 1);
+    if (d.mode === 'bot') b.e = clamp(slot + 1, b.s + 1, d.g.hi);
+    place(d.el, b.s, b.e);
+    d.el.classList.toggle('short', b.e - b.s === 1);
+    d.el.querySelector('.tm').textContent = `${fmt(b.s)}–${fmt(b.e)}`;
+  }
+}
+function updateGhost() {
+  place(drag.el, drag.s, drag.e);
+  drag.el.querySelector('.tm').textContent = `${fmt(drag.s)}–${fmt(drag.e)} · ${dur(drag.e - drag.s)}`;
+}
+function autoScroll() {
+  if (!drag) return;
+  const r = scroller.getBoundingClientRect(), edge = 60;
+  let v = 0;
+  if (drag.y < r.top + edge) v = -(r.top + edge - drag.y) / 4;
+  else if (drag.y > r.bottom - edge) v = (drag.y - (r.bottom - edge)) / 4;
+  if (v) { scroller.scrollTop += clamp(v, -18, 18); step(); }
+  requestAnimationFrame(autoScroll);
+}
+
+function endDrag() {
+  if (!drag) return;
+  const d = drag; drag = null;
+  if (d.mode === 'create') {
+    d.el.remove();
+    const used = new Set(blocks.map(b => b.c));
+    let c = blocks.length % COLORS;
+    for (let i = 0; i < COLORS; i++) if (!used.has((blocks.length + i) % COLORS)) { c = (blocks.length + i) % COLORS; break; }
+    const b = { id: Math.random().toString(36).slice(2, 10), s: d.s, e: d.e, t: '', c };
+    blocks.push(b); save();
+    editingId = b.id; render();
+    focusEditor();
+    $('#hint').classList.remove('show');
+  } else {
+    d.el.classList.remove('active');
+    if (d.mode === 'press') openSheet(d.b.id);
+    else { save(); render(); }
+  }
+}
+
+// iOS mostra la tastiera solo se il focus avviene dentro un gesto dell'utente
+function focusEditor() { const i = inner.querySelector('.block input'); if (i) { i.focus(); return i; } }
+grid.addEventListener('touchend', () => { if (editingId && document.activeElement?.tagName !== 'INPUT') focusEditor(); });
+
+function finishEdit(val) {
+  const b = blocks.find(x => x.id === editingId);
+  editingId = null;
+  if (b) { b.t = val.trim() || 'Attività'; save(); }
+  render();
+}
+
+// tocco su un blocco fuori dalla modalità pianifica
+grid.addEventListener('click', e => {
+  if (planning) return;
+  const bEl = e.target.closest('.block');
+  if (bEl) openSheet(bEl.dataset.id);
+});
+
+// ---------- foglio modifica ----------
+const sw = $('#swatches');
+for (let i = 0; i < COLORS; i++) {
+  const b = document.createElement('button'); b.className = 'c' + i; b.dataset.c = i;
+  b.setAttribute('aria-label', 'Colore ' + (i + 1));
+  b.onclick = () => { const x = blocks.find(x => x.id === sheetId); x.c = i; save(); render(); markSwatch(i); };
+  sw.appendChild(b);
+}
+function markSwatch(c) { sw.querySelectorAll('button').forEach(b => b.classList.toggle('sel', +b.dataset.c === c)); }
+function openSheet(id) {
+  const b = blocks.find(x => x.id === id); if (!b) return;
+  sheetId = id;
+  $('#s-when').textContent = `${fmt(b.s)} – ${fmt(b.e)} · ${dur(b.e - b.s)}`;
+  $('#s-title').value = b.t;
+  markSwatch(b.c);
+  document.body.classList.add('sheet');
+}
+function closeSheet() {
+  const b = blocks.find(x => x.id === sheetId);
+  if (b) { b.t = $('#s-title').value.trim() || 'Attività'; save(); render(); }
+  sheetId = null; $('#s-title').blur();
+  document.body.classList.remove('sheet');
+}
+$('#done').onclick = closeSheet;
+$('#sheet-bg').onclick = closeSheet;
+$('#s-title').addEventListener('keydown', e => { if (e.key === 'Enter') closeSheet(); });
+$('#del').onclick = () => { blocks = blocks.filter(b => b.id !== sheetId); sheetId = null; save(); render();
+  document.body.classList.remove('sheet'); $('#s-title').blur(); };
+
+// ---------- barra e navigazione ----------
+$('#plan').onclick = () => {
+  planning = !planning;
+  document.body.classList.toggle('planning', planning);
+  $('#plan-txt').textContent = planning ? 'Fine' : 'Pianifica';
+  $('#plan-ico').textContent = planning ? '✓' : '＋';
+  $('#hint').classList.toggle('show', planning && !blocks.length);
+  if (!planning && editingId) document.activeElement.blur();
+};
+const shift = n => { const d = parseDate(day); d.setDate(d.getDate() + n); showDay(isoDate(d)); };
+$('#prev').onclick = () => shift(-1);
+$('#next').onclick = () => shift(1);
+$('#title').onclick = () => { showDay(isoDate(new Date())); scrollToNow(); };
+
+function scrollToNow() {
+  const n = new Date(), mins = n.getHours()*60 + n.getMinutes() - START*60;
+  scroller.scrollTop = Math.max(0, (mins / 30) * H() - scroller.clientHeight / 3);
+}
+
+buildGrid();
+showDay(day);
+scrollToNow();
+setInterval(renderNow, 30000);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') { const t = isoDate(new Date()); if (t !== day && !blocks.length) showDay(t); renderNow(); }
+});
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js');
+</script>
+</body>
+</html>
