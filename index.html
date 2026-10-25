@@ -65,6 +65,23 @@
   #title b { display: block; font-size: 19px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #title small { display: block; font-size: 13px; color: var(--muted); margin-top: 2px; }
 
+  #main { flex: 1; display: flex; min-height: 0; }
+  #side { flex: 0 0 0; width: 0; overflow: hidden auto; background: var(--surface);
+    border-left: 0.5px solid var(--line); transition: flex-basis .25s ease, width .25s ease; }
+  body.planning #side { flex-basis: 136px; width: 136px; }
+  #side h3 { margin: 0; padding: 12px 12px 6px; font-size: 12px; font-weight: 600; color: var(--muted);
+    text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
+  .pick { display: flex; gap: 8px; align-items: flex-start; width: calc(100% - 12px); margin: 0 6px 4px;
+    padding: 9px 8px; border: 0; border-radius: 10px; background: none; color: var(--text);
+    font: inherit; font-size: 14px; text-align: left; min-width: 112px; }
+  .pick::before { content: ""; flex: 0 0 10px; height: 10px; margin-top: 4px; border-radius: 5px;
+    border: 1.5px solid var(--muted); box-sizing: border-box; }
+  .pick span { overflow-wrap: anywhere; }
+  .pick small { display: block; font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .pick.sel { background: var(--accent); color: #fff; }
+  .pick.sel::before { border-color: #fff; background: #fff; }
+  .pick.sel small { color: rgba(255,255,255,.8); }
+  #side-empty { padding: 6px 12px; font-size: 13px; color: var(--muted); min-width: 124px; }
   #scroller { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; position: relative; }
   #grid { position: relative; height: calc(var(--h) * 34 + 32px); margin: 0 12px 0 0;
     padding-top: 16px; touch-action: pan-y; }
@@ -90,17 +107,23 @@
   .block .tm, .ghost .tm { font-size: 12px; opacity: .75; font-variant-numeric: tabular-nums; }
   .block.short { display: flex; align-items: center; gap: 8px; padding-top: 0; padding-bottom: 0; }
   .block.short .t { flex: 0 1 auto; }
+  .block.tiny { display: flex; align-items: center; gap: 6px; padding: 0 8px; border-radius: 6px; }
+  .block.tiny .t { flex: 0 1 auto; font-size: 13px; }
+  .block.tiny .tm { font-size: 11px; }
+  .block.tiny input { flex: 1; line-height: 1; }
+  .ghost.tiny { padding-top: 0; padding-bottom: 0; display: flex; align-items: center; }
   .block input { width: 100%; font: inherit; font-size: 16px; font-weight: 600; color: inherit;
     background: transparent; border: 0; outline: none; padding: 0; -webkit-user-select: text; user-select: text; }
   .block input::placeholder { color: inherit; opacity: .5; }
   .block.short input { flex: 1; }
+  .block.tiny input { font-size: 16px; }
   .handle { display: none; position: absolute; left: 0; right: 0; height: 18px; }
   .handle.top { top: -4px; } .handle.bot { bottom: -4px; }
   .handle::after { content: ""; position: absolute; left: 50%; width: 32px; height: 4px; margin-left: -16px;
     border-radius: 2px; background: var(--bd-c); opacity: .7; }
   .handle.top::after { top: 6px; } .handle.bot::after { bottom: 6px; }
   body.planning .handle { display: block; }
-  body.planning .block.short .handle.top { display: none; }
+  body.planning .block.short .handle.top, body.planning .block.tiny .handle { display: none; }
   .c0{--bg-c:var(--c0-bg);--fg-c:var(--c0-fg);--bd-c:var(--c0-bd)}
   .c1{--bg-c:var(--c1-bg);--fg-c:var(--c1-fg);--bd-c:var(--c1-bd)}
   .c2{--bg-c:var(--c2-bg);--fg-c:var(--c2-fg);--bd-c:var(--c2-bd)}
@@ -175,9 +198,12 @@
   <button data-v="time" role="tab">Orario</button><button data-v="todo" role="tab">To do</button>
 </div></div>
 
+<div id="main">
 <div id="scroller">
   <div id="grid"><div id="grid-inner"><div id="now"></div></div></div>
   <div id="todo"><div id="todo-list"></div><div id="todo-empty">Nessuna attività per questo giorno.<br>Tocca “Aggiungi” per crearne una.</div></div>
+</div>
+<aside id="side" aria-label="To do del giorno"><h3>To do</h3><div id="side-list"></div></aside>
 </div>
 
 <footer>
@@ -195,7 +221,7 @@
 </div>
 
 <script>
-const START = 6, SLOTS = 34, COLORS = 6;
+const START = 6, SLOTS = 68, COLORS = 6; // uno slot = 15 minuti
 const H = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--h'));
 const $ = s => document.querySelector(s);
 const inner = $('#grid-inner'), scroller = $('#scroller'), grid = $('#grid');
@@ -207,17 +233,21 @@ let drag = null;
 let editingId = null;
 let sheetId = null;
 let todos = [];
+let picked = null; // to do scelto dal pannello laterale
 let view = 'time';
 try { if (localStorage.getItem('tb:view') === 'todo') view = 'todo'; } catch {}
 
 function isoDate(d) { return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
 function parseDate(s) { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); }
-function fmt(slot) { const m = START*60 + slot*30; return Math.floor(m/60) + ':' + String(m%60).padStart(2,'0'); }
-function dur(n) { const h = Math.floor(n/2), m = n%2 ? 30 : 0; return h ? (m ? `${h} h ${m}` : `${h} h`) : `${m} min`; }
+function fmt(slot) { const m = START*60 + slot*15; return Math.floor(m/60) + ':' + String(m%60).padStart(2,'0'); }
+function dur(n) { const h = Math.floor(n/4), m = (n%4) * 15; return h ? (m ? `${h} h ${m}` : `${h} h`) : `${m} min`; }
+const sizeClass = len => len === 1 ? ' tiny' : len === 2 ? ' short' : '';
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
 function load() {
   try { blocks = JSON.parse(localStorage.getItem('tb:' + day)) || []; } catch { blocks = []; }
+  // i blocchi salvati prima dei quarti d'ora usavano slot da 30 minuti
+  for (const b of blocks) if (!b.q) { b.s *= 2; b.e *= 2; b.q = 1; }
   try { todos = (JSON.parse(localStorage.getItem('td:' + day)) || []).filter(t => t.t.trim()); } catch { todos = []; }
 }
 function saveTodos() {
@@ -236,14 +266,14 @@ function save() {
 
 // ---------- griglia ----------
 function buildGrid() {
-  for (let i = 0; i <= SLOTS; i++) {
+  for (let i = 0; i <= SLOTS / 2; i++) { // righe ogni mezz'ora
     const r = document.createElement('div');
-    r.className = 'row' + (i % 2 ? ' half' : '') + (i === SLOTS ? ' end' : '');
+    r.className = 'row' + (i % 2 ? ' half' : '') + (i === SLOTS / 2 ? ' end' : '');
     r.style.top = `calc(var(--h) * ${i})`;
     inner.appendChild(r);
     const l = document.createElement('div');
     l.className = 'lbl' + (i % 2 ? ' half' : '');
-    l.textContent = i % 2 ? ':30' : fmt(i);
+    l.textContent = i % 2 ? ':30' : fmt(i * 2);
     l.style.top = `calc(var(--h) * ${i})`;
     inner.appendChild(l);
   }
@@ -254,8 +284,7 @@ function render() {
   inner.querySelectorAll('.block').forEach(e => e.remove());
   for (const b of blocks) {
     const el = document.createElement('div');
-    const short = b.e - b.s === 1;
-    el.className = `block c${b.c}` + (short ? ' short' : '');
+    el.className = `block c${b.c}` + sizeClass(b.e - b.s);
     el.dataset.id = b.id;
     place(el, b.s, b.e);
     if (b.id === editingId) {
@@ -289,8 +318,8 @@ function updateSub() {
   $('#dsub').textContent = (day === isoDate(new Date()) ? 'Oggi · ' : '') + txt;
 }
 function place(el, s, e) {
-  el.style.top = `calc(var(--h) * ${s} + 1px)`;
-  el.style.height = `calc(var(--h) * ${e - s} - 2px)`;
+  el.style.top = `calc(var(--h) * ${s / 2} + 1px)`;
+  el.style.height = `calc(var(--h) * ${(e - s) / 2} - 2px)`;
 }
 function renderHeader() {
   const d = parseDate(day);
@@ -300,13 +329,14 @@ function renderHeader() {
 function renderNow() {
   const now = new Date(), el = $('#now');
   const mins = now.getHours()*60 + now.getMinutes() - START*60;
-  if (day !== isoDate(now) || mins < 0 || mins > SLOTS*30) { el.style.display = 'none'; return; }
+  if (day !== isoDate(now) || mins < 0 || mins > SLOTS*15) { el.style.display = 'none'; return; }
   el.style.display = 'block';
   el.style.top = `calc(var(--h) * ${mins / 30} - 1px)`;
 }
 function showDay(d) {
   if (editingId) document.activeElement.blur();
-  day = d; load(); renderHeader(); render(); renderTodos(); renderNow();
+  day = d; picked = null; load(); renderHeader(); render(); renderTodos(); renderNow();
+  if (planning) { renderSide(); updateHint(); }
 }
 
 // ---------- vincoli (niente sovrapposizioni) ----------
@@ -321,7 +351,7 @@ function gap(s, e, id) { // spazio libero attorno a [s, e)
 // ---------- trascinamento ----------
 function slotAt(clientY) {
   const y = clientY - inner.getBoundingClientRect().top;
-  return clamp(Math.floor(y / H()), 0, SLOTS - 1);
+  return clamp(Math.floor(y / (H() / 2)), 0, SLOTS - 1);
 }
 
 grid.addEventListener('pointerdown', e => {
@@ -373,18 +403,22 @@ function step() {
     if (d.mode === 'top') b.s = clamp(slot, d.g.lo, b.e - 1);
     if (d.mode === 'bot') b.e = clamp(slot + 1, b.s + 1, d.g.hi);
     place(d.el, b.s, b.e);
-    d.el.classList.toggle('short', b.e - b.s === 1);
+    d.el.classList.toggle('short', b.e - b.s === 2);
+    d.el.classList.toggle('tiny', b.e - b.s === 1);
     d.el.querySelector('.tm').textContent = `${fmt(b.s)}–${fmt(b.e)}`;
   }
 }
 function updateGhost() {
   place(drag.el, drag.s, drag.e);
+  drag.el.classList.toggle('tiny', drag.e - drag.s === 1);
   drag.el.querySelector('.tm').textContent = `${fmt(drag.s)}–${fmt(drag.e)} · ${dur(drag.e - drag.s)}`;
 }
 function autoScroll() {
   if (!drag) return;
   const r = scroller.getBoundingClientRect(), edge = 60;
   let v = 0;
+  if (Math.abs(drag.y - drag.startY) > 8) drag.moved = true;
+  if (!drag.moved) { requestAnimationFrame(autoScroll); return; } // niente scorrimento a dito fermo
   if (drag.y < r.top + edge) v = -(r.top + edge - drag.y) / 4;
   else if (drag.y > r.bottom - edge) v = (drag.y - (r.bottom - edge)) / 4;
   if (v) { scroller.scrollTop += clamp(v, -18, 18); step(); }
@@ -399,10 +433,10 @@ function endDrag() {
     const used = new Set(blocks.map(b => b.c));
     let c = blocks.length % COLORS;
     for (let i = 0; i < COLORS; i++) if (!used.has((blocks.length + i) % COLORS)) { c = (blocks.length + i) % COLORS; break; }
-    const b = { id: Math.random().toString(36).slice(2, 10), s: d.s, e: d.e, t: '', c };
+    const b = { id: Math.random().toString(36).slice(2, 10), s: d.s, e: d.e, t: picked ? picked.t.trim() : '', c, q: 1 };
     blocks.push(b); save();
-    editingId = b.id; render();
-    focusEditor();
+    if (picked) { picked = null; render(); }
+    else { editingId = b.id; render(); focusEditor(); }
     setPlanning(false);
   } else {
     d.el.classList.remove('active');
@@ -461,9 +495,34 @@ $('#del').onclick = () => { blocks = blocks.filter(b => b.id !== sheetId); sheet
 // ---------- barra e navigazione ----------
 function setPlanning(on) {
   planning = on;
+  if (!on) picked = null;
   document.body.classList.toggle('planning', on);
-  $('#hint').classList.toggle('show', on && !blocks.length);
+  if (on) renderSide();
+  updateHint();
   updateBar();
+}
+function updateHint() {
+  const h = $('#hint');
+  h.textContent = picked ? `Trascina per pianificare “${picked.t.trim()}”` : 'Trascina sulla colonna per creare un blocco';
+  h.classList.toggle('show', planning && (!!picked || !blocks.length));
+}
+const norm = s => s.trim().toLowerCase();
+function renderSide() {
+  const box = $('#side-list');
+  box.innerHTML = '';
+  const open = todos.filter(t => t.t.trim() && !t.d);
+  if (!open.length) { box.innerHTML = '<div id="side-empty">Nessun to do in sospeso</div>'; return; }
+  for (const t of open) {
+    const b = document.createElement('button');
+    b.className = 'pick' + (picked === t ? ' sel' : '');
+    const sp = document.createElement('span');
+    sp.textContent = t.t.trim();
+    const blk = blocks.find(x => norm(x.t) === norm(t.t));
+    if (blk) sp.insertAdjacentHTML('beforeend', `<small>in agenda alle ${fmt(blk.s)}</small>`);
+    b.appendChild(sp);
+    b.onclick = () => { picked = picked === t ? null : t; renderSide(); updateHint(); };
+    box.appendChild(b);
+  }
 }
 function updateBar() {
   const todo = view === 'todo';
